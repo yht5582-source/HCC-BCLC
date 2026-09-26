@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BCLC 肝癌分期與治療決策計算機</title>
+  
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 引入 Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+  <!-- PWA Manifest 動態生成 -->
+  <script>
+    const manifestJSON = {
+      name: "BCLC 肝癌分期計算機",
+      short_name: "BCLC 分期",
+      description: "基於 EASL/AASLD 指引的 HCC 分期與治療計算機",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#f8fafc",
+      theme_color: "#0369a1",
+      icons: [{
+        src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230369a1'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z'/%3E%3C/svg%3E",
+        sizes: "192x192",
+        type: "image/svg+xml"
+      }]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifestJSON)], { type: 'application/json' });
+    const manifestURL = URL.createObjectURL(manifestBlob);
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = manifestURL;
+    document.head.appendChild(link);
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen pb-20">
+  <div id="app" class="max-w-4xl mx-auto px-4 py-6 md:py-10">
+    
+    <header class="mb-8 text-center">
+      <h1 class="text-3xl font-bold text-sky-800 mb-2">肝細胞癌 (HCC) 分期決策計算機</h1>
+      <p class="text-sm text-slate-500">基於 BCLC 2022 Update & EASL/AASLD 國際指引</p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 左側/上方：輸入表單區 -->
+      <div class="lg:col-span-2 space-y-6">
+        
+        <!-- 區塊 1：腫瘤特徵 -->
+        <div class="bg-white shadow rounded-xl overflow-hidden border border-slate-200">
+          <div class="bg-slate-700 px-5 py-3">
+            <h2 class="text-white font-semibold">1. 腫瘤特徵 (Tumor Burden)</h2>
+          </div>
+          <div class="p-5 space-y-4">
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-2">腫瘤數量</label>
+              <div class="grid grid-cols-3 gap-2">
+                <label v-for="opt in options.tumorNum" :key="opt.val" class="flex items-center justify-center p-2 border rounded cursor-pointer transition-colors text-sm text-center" :class="form.tumorNum === opt.val ? 'bg-sky-100 border-sky-500 text-sky-800 font-bold' : 'hover:bg-slate-50'">
+                  <input type="radio" v-model="form.tumorNum" :value="opt.val" class="hidden">
+                  {{ opt.label }}
+                </label>
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-2">最大腫瘤尺寸</label>
+              <div class="grid grid-cols-3 gap-2">
+                <label v-for="opt in options.tumorSize" :key="opt.val" class="flex items-center justify-center p-2 border rounded cursor-pointer transition-colors text-sm text-center" :class="form.tumorSize === opt.val ? 'bg-sky-100 border-sky-500 text-sky-800 font-bold' : 'hover:bg-slate-50'">
+                  <input type="radio" v-model="form.tumorSize" :value="opt.val" class="hidden">
+                  {{ opt.label }}
+                </label>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">大血管侵犯 (MVI)</label>
+                <div class="flex gap-2">
+                  <label v-for="opt in options.yesno" :key="'vasc'+opt.val" class="flex-1 flex items-center justify-center p-2 border rounded cursor-pointer transition-colors text-sm" :class="form.vasc === opt.val ? 'bg-sky-100 border-sky-500 text-sky-800 font-bold' : 'hover:bg-slate-50'">
+                    <input type="radio" v-model="form.vasc" :value="opt.val" class="hidden">
+                    {{ opt.label }}
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">肝外轉移 (EHS)</label>
+                <div class="flex gap-2">
+                  <label v-for="opt in options.yesno" :key="'extra'+opt.val" class="flex-1 flex items-center justify-center p-2 border rounded cursor-pointer transition-colors text-sm" :class="form.extra === opt.val ? 'bg-sky-100 border-sky-500 text-sky-800 font-bold' : 'hover:bg-slate-50'">
+                    <input type="radio" v-model="form.extra" :value="opt.val" class="hidden">
+                    {{ opt.label }}
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 區塊 2：體能狀態 -->
+        <div class="bg-white shadow rounded-xl overflow-hidden border border-slate-200">
+          <div class="bg-slate-700 px-5 py-3">
+            <h2 class="text-white font-semibold">2. 體能狀態 (ECOG PS)</h2>
+          </div>
+          <div class="p-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label v-for="opt in options.ecog" :key="opt.val" class="flex items-start p-3 border rounded cursor-pointer transition-colors" :class="form.ecog === opt.val ? 'bg-sky-100 border-sky-500 text-sky-800' : 'hover:bg-slate-50'">
+                <input type="radio" v-model="form.ecog" :value="opt.val" class="mt-1 mr-3 text-sky-600 focus:ring-sky-500">
+                <div class="text-sm">
+                  <div class="font-bold">分數 {{ opt.val }}</div>
+                  <div class="text-slate-600 mt-1">{{ opt.label }}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 區塊 3：肝功能評估 (Child-Pugh) -->
+        <div class="bg-white shadow rounded-xl overflow-hidden border border-slate-200">
+          <div class="bg-slate-700 px-5 py-3 flex justify-between items-center">
+            <h2 class="text-white font-semibold">3. 肝功能狀態 (Child-Pugh)</h2>
+            <span class="bg-sky-500 text-white text-xs px-2 py-1 rounded font-bold">目前分數: {{ cpScore }} 分 ({{ cpClass }} 級)</span>
+          </div>
+          <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div v-for="(item, key) in options.cp" :key="key">
+              <label class="block text-sm font-bold text-slate-700 mb-2">{{ item.title }}</label>
+              <select v-model="form.cp[key]" class="w-full p-2 border border-slate-300 rounded focus:border-sky-500 focus:ring focus:ring-sky-200 text-sm">
+                <option v-for="opt in item.choices" :value="opt.score">{{ opt.label }} ({{ opt.score }}分)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右側/下方：結果輸出區 -->
+      <div class="lg:col-span-1 relative">
+        <div class="sticky top-6 bg-white rounded-2xl shadow-xl overflow-hidden border-2 transition-colors duration-300" :class="resultColor.border">
+          
+          <div class="px-6 py-4 text-center" :class="resultColor.bg">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-1">BCLC 臨床分期</h3>
+            <div class="text-5xl font-extrabold text-white mb-1">Stage {{ bclcResult.stage }}</div>
+            <div class="text-white/90 text-sm font-medium">{{ bclcResult.stageDesc }}</div>
+          </div>
+
+          <div class="p-6 space-y-5">
+            <!-- 治療指引 -->
+            <div>
+              <div class="text-xs text-slate-500 font-bold uppercase mb-1">指引建議標準治療</div>
+              <div class="text-lg font-bold text-slate-800 leading-tight">
+                {{ bclcResult.treatment }}
+              </div>
+              <ul v-if="bclcResult.txDetails.length" class="mt-2 list-disc pl-5 text-sm text-slate-600 space-y-1">
+                <li v-for="detail in bclcResult.txDetails" :key="detail">{{ detail }}</li>
+              </ul>
+            </div>
+
+            <hr class="border-slate-100">
+
+            <!-- 預估預後 -->
+            <div>
+              <div class="text-xs text-slate-500 font-bold uppercase mb-1">預估中位存活期 (Prognosis)</div>
+              <div class="flex items-center text-emerald-700 font-bold text-xl">
+                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                {{ bclcResult.prognosis }}
+              </div>
+            </div>
+
+            <!-- 臨床提醒 -->
+            <div class="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-800 mt-4 leading-relaxed">
+              <strong>臨床注意：</strong> {{ bclcResult.note }}
+            </div>
+          </div>
+
+        </div>
+      </div>
+      
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+      setup() {
+        const form = ref({
+          tumorNum: 'single',
+          tumorSize: '<=2',
+          vasc: 'no',
+          extra: 'no',
+          ecog: 0,
+          cp: { enceph: 1, ascites: 1, bili: 1, albu: 1, inr: 1 }
+        });
+
+        const options = {
+          tumorNum: [
+            { label: '單一顆', val: 'single' },
+            { label: '2 到 3 顆', val: '2-3' },
+            { label: '多發性 (>3顆)', val: 'multi' }
+          ],
+          tumorSize: [
+            { label: '≤ 2 cm', val: '<=2' },
+            { label: '> 2 且 ≤ 3 cm', val: '2-3' },
+            { label: '> 3 cm', val: '>3' }
+          ],
+          yesno: [
+            { label: '無 (No)', val: 'no' },
+            { label: '有 (Yes)', val: 'yes' }
+          ],
+          ecog: [
+            { val: 0, label: '活動能力完全正常' },
+            { val: 1, label: '僅能從事輕便工作，無法劇烈勞動' },
+            { val: 2, label: '生活自理，>50%時間可活動，無法工作' },
+            { val: 3, label: '僅能部分自理，>50%時間需臥床/坐椅' },
+            { val: 4, label: '完全無法自理，整日臥床' }
+          ],
+          cp: {
+            enceph: { title: '肝腦病變', choices: [{label: '無', score: 1}, {label: '第一/二度 (輕中)', score: 2}, {label: '第三/四度 (重度)', score: 3}] },
+            ascites: { title: '腹水', choices: [{label: '無', score: 1}, {label: '輕度/藥物可控', score: 2}, {label: '中重度/難治型', score: 3}] },
+            bili: { title: '總膽紅素 (Bilirubin)', choices: [{label: '< 2.0 mg/dL', score: 1}, {label: '2.0 - 3.0 mg/dL', score: 2}, {label: '> 3.0 mg/dL', score: 3}] },
+            albu: { title: '白蛋白 (Albumin)', choices: [{label: '> 3.5 g/dL', score: 1}, {label: '2.8 - 3.5 g/dL', score: 2}, {label: '< 2.8 g/dL', score: 3}] },
+            inr: { title: '凝血酶原時間 (PT/INR)', choices: [{label: 'INR < 1.7', score: 1}, {label: 'INR 1.7 - 2.3', score: 2}, {label: 'INR > 2.3', score: 3}] }
+          }
+        };
+
+        const cpScore = computed(() => {
+          const v = form.value.cp;
+          return parseInt(v.enceph) + parseInt(v.ascites) + parseInt(v.bili) + parseInt(v.albu) + parseInt(v.inr);
+        });
+
+        const cpClass = computed(() => {
+          if (cpScore.value <= 6) return 'A';
+          if (cpScore.value <= 9) return 'B';
+          return 'C';
+        });
+
+        const bclcResult = computed(() => {
+          const f = form.value;
+          const cps = cpClass.value;
+          
+          // 判定 Stage D (End-Stage)
+          if (f.ecog >= 3 || cps === 'C') {
+            return {
+              stage: 'D',
+              stageDesc: '末期 (End-Stage)',
+              treatment: '最佳支持性療法 (Best Supportive Care)',
+              txDetails: [
+                '安寧緩和醫療 (Hospice care)',
+                '症狀控制與營養支持'
+              ],
+              prognosis: '約 3 個月',
+              note: '若患者符合米蘭準則 (Milan criteria) 且評估適宜，肝臟移植 (Liver Transplantation) 是唯一可能改變 Stage D 預後的治癒性手段。'
+            };
+          }
+
+          // 判定 Stage C (Advanced)
+          if (f.ecog >= 1 || f.vasc === 'yes' || f.extra === 'yes') {
+            return {
+              stage: 'C',
+              stageDesc: '晚期 (Advanced)',
+              treatment: '全身性系統治療 (Systemic Therapy)',
+              txDetails: [
+                '第一線首選：Atezolizumab + Bevacizumab',
+                '第一線替代：Tremelimumab + Durvalumab',
+                '標靶藥物：Sorafenib, Lenvatinib'
+              ],
+              prognosis: '大於 2 年 (中位數)',
+              note: '隨著免疫組合療法 (I-O combo) 的進步，Stage C 患者的預估存活期已顯著延長。需密切追蹤免疫相關副作用。'
+            };
+          }
+
+          // 判定 Stage B (Intermediate)
+          if (f.tumorNum === 'multi' || (f.tumorNum === '2-3' && f.tumorSize === '>3')) {
+            return {
+              stage: 'B',
+              stageDesc: '中期 (Intermediate)',
+              treatment: '經動脈化學栓塞術 (TACE)',
+              txDetails: [
+                '腫瘤界線清楚且非瀰漫性：首選 TACE',
+                '若不適合 TACE (如：腫瘤瀰漫、肝功能邊緣)：可考慮轉換為全身性系統治療'
+              ],
+              prognosis: '大於 2.5 年 (中位數)',
+              note: 'BCLC 2022 強調，若 TACE 無法達到良好療效或已產生 TACE refractory，應儘早轉換 (Stage Migration) 為全身性標靶/免疫治療。'
+            };
+          }
+
+          // 判定 Stage 0 (Very Early)
+          if (f.tumorNum === 'single' && f.tumorSize === '<=2' && cps === 'A') {
+            return {
+              stage: '0',
+              stageDesc: '極早期 (Very Early)',
+              treatment: '射頻燒灼術 (Ablation) 或 手術切除',
+              txDetails: [
+                '首選：射頻燒灼 (RFA) 或 微波燒灼 (MWA)',
+                '若位置不佳且肝功能極佳：可考慮手術切除 (Resection)'
+              ],
+              prognosis: '大於 5 年',
+              note: '此階段腫瘤極小，無論使用電燒或手術，皆有極高的治癒率。對於 <=2cm 的腫瘤，RFA 效果等同於手術，且併發症更少。'
+            };
+          }
+
+          // 其餘為 Stage A (Early)
+          return {
+            stage: 'A',
+            stageDesc: '早期 (Early)',
+            treatment: '治癒性介入 (手術、電燒或移植)',
+            txDetails: [
+              '無門脈高壓且肝功能良好：首選 肝切除手術',
+              '不適合手術：射頻燒灼 (RFA/MWA)',
+              '符合米蘭準則且不適合切除：評估肝臟移植'
+            ],
+            prognosis: '大於 5 年',
+            note: '治療選擇高度依賴患者門靜脈壓力 (Portal hypertension) 以及膽紅素數值。必要時可輔助 ALBI Score 做進一步評估。'
+          };
+        });
+
+        const resultColor = computed(() => {
+          const s = bclcResult.value.stage;
+          if (s === '0') return { border: 'border-emerald-500', bg: 'bg-emerald-500' };
+          if (s === 'A') return { border: 'border-teal-500', bg: 'bg-teal-500' };
+          if (s === 'B') return { border: 'border-blue-500', bg: 'bg-blue-500' };
+          if (s === 'C') return { border: 'border-amber-500', bg: 'bg-amber-500' };
+          return { border: 'border-rose-600', bg: 'bg-rose-600' };
+        });
+
+        return { form, options, cpScore, cpClass, bclcResult, resultColor };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
